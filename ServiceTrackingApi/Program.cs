@@ -16,7 +16,6 @@ builder.Services.AddControllers();
 
 
 // 2) JWT Authentication (Issuer/Audience şartlı doğrulama)
-
 var cfg = builder.Configuration;
 
 // Prod'da mutlaka 32+ karakterlik güçlü bir key kullan.
