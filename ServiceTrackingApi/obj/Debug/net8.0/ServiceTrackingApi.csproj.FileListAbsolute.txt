@@ -168,3 +168,4 @@
 /Users/cerenmutlu/Desktop/ServiceTrackingAPI/ServiceTrackingApi/obj/Debug/net8.0/ServiceTrackingApi.genruntimeconfig.cache
 /Users/cerenmutlu/Desktop/ServiceTrackingAPI/ServiceTrackingApi/obj/Debug/net8.0/ref/ServiceTrackingApi.dll
 /Users/cerenmutlu/Desktop/ServiceTrackingAPI/ServiceTrackingApi/bin/Debug/net8.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
+/Users/cerenmutlu/Desktop/ServiceTrackingAPI/ServiceTrackingApi/obj/Debug/net8.0/ServiceTrackingApi.sourcelink.json

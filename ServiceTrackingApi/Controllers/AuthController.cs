@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ServiceTrackingApi.Data;
 using ServiceTrackingApi.Models;
-using System.Security.Cryptography;
+using ServiceTrackingApi.Security; // PBKDF2 hasher
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -11,11 +11,11 @@ using System.Security.Claims;
 namespace ServiceTrackingApi.Controllers
 {
     [Route("api/[controller]")]
-    [ApiController]
+    [ApiController] // Otomatik model state doğrulama, 400 bad request vs. için yardımcı
     public class AuthController : ControllerBase
     {
-        private readonly RepositoryContext _context;
-        private readonly IConfiguration _configuration;
+        private readonly RepositoryContext _context;        // EF Core DbContext (Users, Roles tablosu)
+        private readonly IConfiguration _configuration;     // appsettings.json’dan Jwt:Key, Issuer, Audience vs. okumak için
 
         public AuthController(RepositoryContext context, IConfiguration configuration)
         {
@@ -27,29 +27,23 @@ namespace ServiceTrackingApi.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
         {
-            if (string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password))
-            {
+            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
                 return BadRequest("Username and password are required");
-            }
 
-            // Find user by username or email
+            
             var user = await _context.Users
-                .Include(u => u.Role)
+                .Include(u => u.Role) // Token'a role claim eklemek için Role ilişkisini çekiyoruz
                 .FirstOrDefaultAsync(u => u.Username == request.Username || u.Email == request.Username);
 
-            if (user == null)
-            {
+            if (user is null)
                 return Unauthorized("Invalid credentials");
-            }
 
-            // Verify password
-            if (!VerifyPassword(request.Password, user.PasswordHash))
-            {
+            // PBKDF2 ile parolayı doğrula
+            if (!PasswordHasher.Verify(request.Password, user.PasswordHash))
                 return Unauthorized("Invalid credentials");
-            }
 
-            // Generate JWT token
-            var token = GenerateJwtToken(user);
+            // JWT üret
+            var token = GenerateJwtToken(user, out DateTime expiresAtUtc);
 
             return Ok(new LoginResponse
             {
@@ -60,9 +54,9 @@ namespace ServiceTrackingApi.Controllers
                     FullName = user.FullName,
                     Username = user.Username,
                     Email = user.Email,
-                    RoleName = user.Role.RoleName
+                    RoleName = user.Role?.RoleName ?? string.Empty
                 },
-                ExpiresAt = DateTime.UtcNow.AddHours(24)
+                ExpiresAt = expiresAtUtc
             });
         }
 
@@ -70,37 +64,40 @@ namespace ServiceTrackingApi.Controllers
         [HttpPost("register")]
         public async Task<ActionResult<User>> Register([FromBody] RegisterRequest request)
         {
-            // Validate input
-            if (string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password) ||
-                string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.FullName))
+            // Basit doğrulamalar
+            if (string.IsNullOrWhiteSpace(request.Username) ||
+                string.IsNullOrWhiteSpace(request.Password) ||
+                string.IsNullOrWhiteSpace(request.Email) ||
+                string.IsNullOrWhiteSpace(request.FullName))
             {
                 return BadRequest("All fields are required");
             }
 
-            // Check if username already exists
-            var existingUser = await _context.Users
-                .AnyAsync(u => u.Username == request.Username || u.Email == request.Email);
-            if (existingUser)
-            {
-                return BadRequest("Username or email already exists");
-            }
+            // Şifre uzunluk kontrolü
+            if (request.Password.Length < 6)
+                return BadRequest("Password must be at least 6 characters long");
 
-            // Check if role exists
-            var roleExists = await _context.Roles.AnyAsync(r => r.RoleID == request.RoleID);
-            if (!roleExists)
-            {
-                return BadRequest("Invalid role");
-            }
+            // Email format kontrolü (basit)
+            if (!request.Email.Contains("@"))
+                return BadRequest("Invalid email format");
 
-            // Hash password
-            var passwordHash = HashPassword(request.Password);
+            // Kullanıcı/Email var mı?
+            bool exists = await _context.Users.AnyAsync(u => u.Username == request.Username || u.Email == request.Email);
+            if (exists) return BadRequest("Username or email already exists");
+
+            // Rol var mı?
+            bool roleExists = await _context.Roles.AnyAsync(r => r.RoleID == request.RoleID);
+            if (!roleExists) return BadRequest("Invalid role");
+
+            // Parola hashle (PBKDF2)
+            string hash = PasswordHasher.Hash(request.Password);
 
             var user = new User
             {
                 FullName = request.FullName,
                 Username = request.Username,
                 Email = request.Email,
-                PasswordHash = passwordHash,
+                PasswordHash = hash,
                 RoleID = request.RoleID,
                 CreatedAt = DateTime.UtcNow
             };
@@ -108,81 +105,94 @@ namespace ServiceTrackingApi.Controllers
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            // Remove password hash from response
+            // Güvenlik gereği response'ta hash'i göndermiyoruz
             user.PasswordHash = string.Empty;
 
-            return CreatedAtAction("GetUser", "User", new { id = user.UserID }, user);
+            // Başarılı kayıt sonrası kullanıcı bilgilerini döndür
+            return Ok(new { message = "User registered successfully", user = new UserInfo
+            {
+                UserID = user.UserID,
+                FullName = user.FullName,
+                Username = user.Username,
+                Email = user.Email,
+                RoleName = "" // Rol bilgisi için ayrı sorgu gerekir
+            }});
         }
 
         // POST: api/Auth/change-password
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
+            
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+                return BadRequest("Current password and new password are required");
+
+            if (request.NewPassword.Length < 6)
+                return BadRequest("New password must be at least 6 characters long");
+
             var user = await _context.Users.FindAsync(request.UserID);
-            if (user == null)
-            {
-                return NotFound("User not found");
-            }
+            if (user is null) return NotFound("User not found");
 
-            // Verify current password
-            if (!VerifyPassword(request.CurrentPassword, user.PasswordHash))
-            {
+            
+            if (!PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash))
                 return BadRequest("Current password is incorrect");
-            }
 
-            // Hash new password
-            user.PasswordHash = HashPassword(request.NewPassword);
+            // Yeni parolayı hashle ve kaydet
+            user.PasswordHash = PasswordHasher.Hash(request.NewPassword);
             user.UpdatedAt = DateTime.UtcNow;
-
             await _context.SaveChangesAsync();
 
-            return Ok("Password changed successfully");
+            return Ok(new { message = "Password changed successfully" });
         }
 
-        // GET: api/Auth/roles
+        // GET: api/Auth/roles  -Roller listesi 
         [HttpGet("roles")]
         public async Task<ActionResult<IEnumerable<Role>>> GetRoles()
-        {
-            return await _context.Roles.ToListAsync();
-        }
+            => await _context.Roles.ToListAsync();
 
         // GET: api/Auth/validate-token
+        // Header: Authorization: Bearer <token>
         [HttpGet("validate-token")]
         public IActionResult ValidateToken()
         {
-            var token = Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
-            
-            if (string.IsNullOrEmpty(token))
-            {
+            var token = Request.Headers["Authorization"].FirstOrDefault()?.Split(' ').Last();
+            if (string.IsNullOrWhiteSpace(token))
                 return Unauthorized("Token is required");
-            }
 
             try
             {
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"] ?? "your-secret-key-here");
-                
-                tokenHandler.ValidateToken(token, new TokenValidationParameters
+                var handler = new JwtSecurityTokenHandler();
+                var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? "dev-key-change-me");
+                var issuer = _configuration["Jwt:Issuer"];
+                var audience = _configuration["Jwt:Audience"];
+
+                // Üretimle aynı doğrulama parametreleri (Issuer/Audience/Lifetime/Key)
+                handler.ValidateToken(token, new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                    ClockSkew = TimeSpan.Zero
-                }, out SecurityToken validatedToken);
 
-                var jwtToken = (JwtSecurityToken)validatedToken;
-                var userId = int.Parse(jwtToken.Claims.First(x => x.Type == "userId").Value);
-                var username = jwtToken.Claims.First(x => x.Type == "username").Value;
-                var role = jwtToken.Claims.First(x => x.Type == "role").Value;
+                    ValidateIssuer = !string.IsNullOrEmpty(issuer),
+                    ValidIssuer = issuer,
 
-                return Ok(new
-                {
-                    Valid = true,
-                    UserID = userId,
-                    Username = username,
-                    Role = role
-                });
+                    ValidateAudience = !string.IsNullOrEmpty(audience),
+                    ValidAudience = audience,
+
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero // expire olmuş token geçmesin
+                }, out var validated);
+
+                var jwt = (JwtSecurityToken)validated;
+
+                
+                var userId = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value
+                             ?? jwt.Claims.FirstOrDefault(c => c.Type == "userId")?.Value; 
+                var username = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
+                               ?? jwt.Claims.FirstOrDefault(c => c.Type == "username")?.Value;
+                var role = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value
+                           ?? jwt.Claims.FirstOrDefault(c => c.Type == "role")?.Value;
+
+                return Ok(new { Valid = true, UserID = userId, Username = username, Role = role });
             }
             catch
             {
@@ -190,56 +200,65 @@ namespace ServiceTrackingApi.Controllers
             }
         }
 
-        private string HashPassword(string password)
+        private string GenerateJwtToken(User user, out DateTime expiresAtUtc)
         {
-            using (var sha256 = SHA256.Create())
-            {
-                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password + "salt"));
-                return Convert.ToBase64String(hashedBytes);
-            }
-        }
+            var keyBytes = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? "dev-key-change-me");
+            var issuer = _configuration["Jwt:Issuer"];
+            var audience = _configuration["Jwt:Audience"];
 
-        private bool VerifyPassword(string password, string hash)
-        {
-            var passwordHash = HashPassword(password);
-            return passwordHash == hash;
-        }
-
-        private string GenerateJwtToken(User user)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"] ?? "your-secret-key-here");
-            
-            var tokenDescriptor = new SecurityTokenDescriptor
+            var claims = new List<Claim>
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim("userId", user.UserID.ToString()),
-                    new Claim("username", user.Username),
-                    new Claim("email", user.Email),
-                    new Claim("role", user.Role.RoleName)
-                }),
-                Expires = DateTime.UtcNow.AddHours(24),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                
+                new Claim(JwtRegisteredClaimNames.Sub, user.UserID.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+
+                
+                new Claim(ClaimTypes.Name, user.Username ?? string.Empty),
+
+               
+                new Claim("userId", user.UserID.ToString()),
+                new Claim("username", user.Username ?? string.Empty),
+                new Claim("email", user.Email ?? string.Empty)
             };
-            
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+
+            // Rol claim'i: [Authorize(Roles="Admin")] ile çalışması için ClaimTypes.Role kullan
+            if (!string.IsNullOrEmpty(user.Role?.RoleName))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, user.Role.RoleName));
+                claims.Add(new Claim("role", user.Role.RoleName));
+            }
+
+            var credentials = new SigningCredentials(new SymmetricSecurityKey(keyBytes), SecurityAlgorithms.HmacSha256);
+            var now = DateTime.UtcNow;
+            var expiryHours = _configuration.GetValue<int>("Jwt:ExpiryInHours", 24);
+            expiresAtUtc = now.AddHours(expiryHours);
+
+            var token = new JwtSecurityToken(
+                issuer: issuer,              
+                audience: audience,          
+                claims: claims,
+                notBefore: now,
+                expires: expiresAtUtc,
+                signingCredentials: credentials
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 
-    // Request/Response Models
+    // --- Request/Response DTO'lar ---
+
     public class LoginRequest
     {
-        public string Username { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty; // kullanıcı adı veya email
         public string Password { get; set; } = string.Empty;
     }
 
     public class LoginResponse
     {
-        public string Token { get; set; } = string.Empty;
-        public UserInfo User { get; set; } = new UserInfo();
-        public DateTime ExpiresAt { get; set; }
+        public string Token { get; set; } = string.Empty;    // Erişim token'ı (Bearer)
+        public UserInfo User { get; set; } = new UserInfo(); // UI için temel kullanıcı bilgisi
+        public DateTime ExpiresAt { get; set; }              // Token bitiş zamanı (UTC)
     }
 
     public class UserInfo

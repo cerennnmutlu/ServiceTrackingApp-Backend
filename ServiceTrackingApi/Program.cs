@@ -2,35 +2,58 @@ using Microsoft.EntityFrameworkCore;
 using ServiceTrackingApi.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// DbContext (appsettings.json -> ConnectionStrings:Default)
+
+// 1) DB Bağlantısı
 builder.Services.AddDbContext<RepositoryContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
-// İleride ekleyeceğimiz Controller'lar için
 builder.Services.AddControllers();
 
-// JWT Authentication
+
+// 2) JWT Authentication (Issuer/Audience şartlı doğrulama)
+
+var cfg = builder.Configuration;
+
+// Prod'da mutlaka 32+ karakterlik güçlü bir key kullan.
+var jwtKey = cfg["Jwt:Key"] ?? "dev-key-change-me-32+chars-minimum";
+var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+var signingKey = new SymmetricSecurityKey(keyBytes);
+
+bool validateIssuer = !string.IsNullOrWhiteSpace(cfg["Jwt:Issuer"]);
+bool validateAudience = !string.IsNullOrWhiteSpace(cfg["Jwt:Audience"]);
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        // Lokal geliştirmede HTTP üstünden test ediyorsan:
+        if (builder.Environment.IsDevelopment())
+            options.RequireHttpsMetadata = false;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-                builder.Configuration["Jwt:Key"] ?? "your-secret-key-here-make-it-long-enough-for-security")),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            IssuerSigningKey = signingKey,
+
+            // Issuer/Audience config'te verilmişse doğrula; verilmemişse dev modda kapalı kalsın
+            ValidateIssuer = validateIssuer,
+            ValidIssuer = cfg["Jwt:Issuer"],
+
+            ValidateAudience = validateAudience,
+            ValidAudience = cfg["Jwt:Audience"],
+
+            ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
     });
 
 builder.Services.AddAuthorization();
 
-// CORS
+// 3) CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -41,60 +64,60 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Swagger
+
+// 4) Swagger + Bearer şeması
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "ServiceTracking API", Version = "v1" });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme",
+        Description = "JWT Bearer. Örnek: **Bearer {token}**",
         Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-    
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            new OpenApiSecurityScheme
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Reference = new OpenApiReference
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Type = ReferenceType.SecurityScheme,
                     Id = "Bearer"
                 }
             },
-            new string[] {}
+            Array.Empty<string>()
         }
     });
 });
 
 var app = builder.Build();
 
-// Opsiyonel: açılışta pending migration'ları uygula
+
+// 5) Açılışta migration uygula
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<RepositoryContext>();
     db.Database.Migrate();
 }
 
-// Pipeline
+
+// 6) HTTP pipeline
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Basit healthcheck
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
-
-// Controller endpoint'leri (ekleyince çalışır)
 app.MapControllers();
 
 app.Run();
