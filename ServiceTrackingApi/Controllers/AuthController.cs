@@ -211,20 +211,18 @@ namespace ServiceTrackingApi.Controllers
                 
                 new Claim(JwtRegisteredClaimNames.Sub, user.UserID.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-
-                
                 new Claim(ClaimTypes.Name, user.Username ?? string.Empty),
 
                
                 new Claim("userId", user.UserID.ToString()),
                 new Claim("username", user.Username ?? string.Empty),
-                new Claim("email", user.Email ?? string.Empty)
+                
             };
 
             // Rol claim'i: [Authorize(Roles="Admin")] ile çalışması için ClaimTypes.Role kullan
             if (!string.IsNullOrEmpty(user.Role?.RoleName))
             {
-                claims.Add(new Claim(ClaimTypes.Role, user.Role.RoleName));
+               // claims.Add(new Claim(ClaimTypes.Role, user.Role.RoleName));
                 claims.Add(new Claim("role", user.Role.RoleName));
             }
 
