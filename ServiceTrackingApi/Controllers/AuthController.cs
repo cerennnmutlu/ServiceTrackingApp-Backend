@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ServiceTrackingApi.Controllers
 {
@@ -70,16 +71,16 @@ namespace ServiceTrackingApi.Controllers
                 string.IsNullOrWhiteSpace(request.Email) ||
                 string.IsNullOrWhiteSpace(request.FullName))
             {
-                return BadRequest("All fields are required");
+                return BadRequest("Tüm alanlar gereklidir.");
             }
 
-            // Şifre uzunluk kontrolü
-            if (request.Password.Length < 6)
-                return BadRequest("Password must be at least 6 characters long");
+            // Şifre güçlülük kontrolü
+            var passwordValidation = ValidatePassword(request.Password);
+            if (!passwordValidation.IsValid)
+                return BadRequest(passwordValidation.ErrorMessage);
 
-            // Email format kontrolü (basit)
-            if (!request.Email.Contains("@"))
-                return BadRequest("Invalid email format");
+            if (!IsValidEmail(request.Email))
+                return BadRequest("Geçerli bir e-posta adresi giriniz.");
 
             // Kullanıcı/Email var mı?
             bool exists = await _context.Users.AnyAsync(u => u.Username == request.Username || u.Email == request.Email);
@@ -119,36 +120,185 @@ namespace ServiceTrackingApi.Controllers
             }});
         }
 
-        // POST: api/Auth/change-password
-        [HttpPost("change-password")]
+        // PUT: api/Auth/change-password - Kullanıcının kendi şifresini değiştir
+        [HttpPut("change-password")]
+        [Authorize]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
-            
-            if (string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
-                return BadRequest("Current password and new password are required");
+            try
+            {
+                // JWT token'dan kullanıcı ID'sini al
+                var userIdClaim = User.FindFirst("userId") ?? User.FindFirst(JwtRegisteredClaimNames.Sub);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    return Unauthorized("Invalid token");
+                }
 
-            if (request.NewPassword.Length < 6)
-                return BadRequest("New password must be at least 6 characters long");
+                // Giriş doğrulaması
+                if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+                    return BadRequest("Mevcut şifre gereklidir.");
 
-            var user = await _context.Users.FindAsync(request.UserID);
-            if (user is null) return NotFound("User not found");
+                if (string.IsNullOrWhiteSpace(request.NewPassword))
+                    return BadRequest("Yeni şifre gereklidir.");
 
-            
-            if (!PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash))
-                return BadRequest("Current password is incorrect");
+                // Şifre güçlülük kontrolü
+                 var passwordValidation = ValidatePassword(request.NewPassword);
+                 if (!passwordValidation.IsValid)
+                     return BadRequest(passwordValidation.ErrorMessage);
 
-            // Yeni parolayı hashle ve kaydet
-            user.PasswordHash = PasswordHasher.Hash(request.NewPassword);
-            user.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+                // Kullanıcıyı veritabanından getir
+                var user = await _context.Users.FindAsync(userId);
+                if (user == null)
+                {
+                    return NotFound("User not found");
+                }
 
-            return Ok(new { message = "Password changed successfully" });
+                // Mevcut şifre doğrulaması
+                if (!PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash))
+                {
+                    return BadRequest("Mevcut şifre yanlış.");
+                }
+
+                // Yeni şifrenin mevcut şifreyle aynı olmaması kontrolü
+                if (PasswordHasher.Verify(request.NewPassword, user.PasswordHash))
+                {
+                    return BadRequest("Yeni şifre mevcut şifreyle aynı olamaz.");
+                }
+
+                // Yeni şifreyi hashle ve kaydet
+                user.PasswordHash = PasswordHasher.Hash(request.NewPassword);
+                user.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Şifre başarıyla değiştirildi." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Şifre değiştirilirken bir hata oluştu.", error = ex.Message });
+            }
         }
 
         // GET: api/Auth/roles  -Roller listesi 
         [HttpGet("roles")]
         public async Task<ActionResult<IEnumerable<Role>>> GetRoles()
             => await _context.Roles.ToListAsync();
+
+        // GET: api/Auth/profile - Kullanıcının kendi profil bilgileri
+        [HttpGet("profile")]
+        [Authorize]
+        public async Task<ActionResult<UserInfo>> GetProfile()
+        {
+            try
+            {
+                // JWT token'dan kullanıcı ID'sini al
+                var userIdClaim = User.FindFirst("userId") ?? User.FindFirst(JwtRegisteredClaimNames.Sub);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    return Unauthorized("Invalid token");
+                }
+
+                // Kullanıcı bilgilerini veritabanından getir
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.UserID == userId);
+
+                if (user == null)
+                {
+                    return NotFound("User not found");
+                }
+
+                // Kullanıcı bilgilerini döndür
+                return Ok(new UserInfo
+                {
+                    UserID = user.UserID,
+                    FullName = user.FullName,
+                    Username = user.Username,
+                    Email = user.Email,
+                    RoleName = user.Role?.RoleName ?? string.Empty
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Profil bilgileri getirilirken bir hata oluştu.", error = ex.Message });
+            }
+        }
+
+        // PUT: api/Auth/profile - Kullanıcının kendi profil bilgilerini güncelle
+        [HttpPut("profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+        {
+            try
+            {
+                // JWT token'dan kullanıcı ID'sini al
+                var userIdClaim = User.FindFirst("userId") ?? User.FindFirst(JwtRegisteredClaimNames.Sub);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    return Unauthorized("Invalid token");
+                }
+
+                // Giriş doğrulaması
+                if (string.IsNullOrWhiteSpace(request.FullName))
+                    return BadRequest("Ad Soyad gereklidir.");
+
+                if (string.IsNullOrWhiteSpace(request.Username))
+                    return BadRequest("Kullanıcı adı gereklidir.");
+
+                if (string.IsNullOrWhiteSpace(request.Email))
+                    return BadRequest("E-posta gereklidir.");
+
+                // E-posta format kontrolü
+                if (!IsValidEmail(request.Email))
+                    return BadRequest("Geçerli bir e-posta adresi giriniz.");
+
+                // Kullanıcıyı veritabanından getir
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.UserID == userId);
+                if (user == null)
+                {
+                    return NotFound("User not found");
+                }
+
+                // Kullanıcı adı ve e-posta benzersizlik kontrolü (kendi kaydı hariç)
+                var existingUserByUsername = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Username == request.Username && u.UserID != userId);
+                if (existingUserByUsername != null)
+                {
+                    return BadRequest("Bu kullanıcı adı zaten kullanılıyor.");
+                }
+
+                var existingUserByEmail = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == request.Email && u.UserID != userId);
+                if (existingUserByEmail != null)
+                {
+                    return BadRequest("Bu e-posta adresi zaten kullanılıyor.");
+                }
+
+                // Kullanıcı bilgilerini güncelle
+                user.FullName = request.FullName.Trim();
+                user.Username = request.Username.Trim();
+                user.Email = request.Email.Trim();
+
+                await _context.SaveChangesAsync();
+
+                // Güncellenmiş kullanıcı bilgilerini döndür
+                var updatedUser = await _context.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.UserID == userId);
+
+                return Ok(new UserInfo
+                {
+                    UserID = updatedUser.UserID,
+                    FullName = updatedUser.FullName,
+                    Username = updatedUser.Username,
+                    Email = updatedUser.Email,
+                    RoleName = updatedUser.Role?.RoleName ?? string.Empty
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Profil güncellenirken bir hata oluştu.", error = ex.Message });
+            }
+        }
 
         // GET: api/Auth/validate-token
         // Header: Authorization: Bearer <token>
@@ -242,6 +392,42 @@ namespace ServiceTrackingApi.Controllers
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        private bool IsValidEmail(string email)
+        {
+            try
+            {
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private (bool IsValid, string ErrorMessage) ValidatePassword(string password)
+        {
+            if (string.IsNullOrWhiteSpace(password))
+                return (false, "Şifre boş olamaz.");
+
+            if (password.Length < 8)
+                return (false, "Şifre en az 8 karakter olmalıdır.");
+
+            if (!password.Any(char.IsUpper))
+                return (false, "Şifre en az bir büyük harf içermelidir.");
+
+            if (!password.Any(char.IsLower))
+                return (false, "Şifre en az bir küçük harf içermelidir.");
+
+            if (!password.Any(char.IsDigit))
+                return (false, "Şifre en az bir rakam içermelidir.");
+
+            if (!password.Any(c => !char.IsLetterOrDigit(c)))
+                return (false, "Şifre en az bir özel karakter içermelidir.");
+
+            return (true, string.Empty);
+        }
     }
 
     // --- Request/Response DTO'lar ---
@@ -279,8 +465,14 @@ namespace ServiceTrackingApi.Controllers
 
     public class ChangePasswordRequest
     {
-        public int UserID { get; set; }
         public string CurrentPassword { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class UpdateProfileRequest
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
     }
 }
