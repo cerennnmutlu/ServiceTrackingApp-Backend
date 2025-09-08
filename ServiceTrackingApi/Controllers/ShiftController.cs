@@ -20,6 +20,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Shift
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<Shift>>> GetShifts()
         {
             try
@@ -35,6 +36,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Shift/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<Shift>> GetShift(int id)
         {
             try
@@ -56,6 +58,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/Shift
         [HttpPost]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<Shift>> CreateShift(ShiftCreateDto shiftDto)
         {
             try
@@ -112,6 +115,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/Shift/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<IActionResult> UpdateShift(int id, ShiftUpdateDto shiftDto)
         {
             try
@@ -185,6 +189,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/Shift/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteShift(int id)
         {
             try
@@ -220,6 +225,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Shift/active
         [HttpGet("active")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<Shift>>> GetActiveShifts()
         {
             try
@@ -239,6 +245,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Shift/current
         [HttpGet("current")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<Shift>> GetCurrentShift()
         {
             try

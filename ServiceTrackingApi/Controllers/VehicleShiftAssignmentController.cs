@@ -21,6 +21,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleShiftAssignment
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleShiftAssignment>>> GetVehicleShiftAssignments()
         {
             try
@@ -40,6 +41,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleShiftAssignment/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<VehicleShiftAssignment>> GetVehicleShiftAssignment(int id)
         {
             try
@@ -64,6 +66,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleShiftAssignment/vehicle/5
         [HttpGet("vehicle/{vehicleId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleShiftAssignment>>> GetAssignmentsByVehicle(int vehicleId)
         {
             try
@@ -85,6 +88,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleShiftAssignment/shift/5
         [HttpGet("shift/{shiftId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleShiftAssignment>>> GetAssignmentsByShift(int shiftId)
         {
             try
@@ -106,6 +110,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleShiftAssignment/date/2025-01-15
         [HttpGet("date/{date}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleShiftAssignment>>> GetAssignmentsByDate(DateTime date)
         {
             try
@@ -127,6 +132,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleShiftAssignment/today
         [HttpGet("today")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleShiftAssignment>>> GetTodayAssignments()
         {
             try
@@ -149,6 +155,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/VehicleShiftAssignment
         [HttpPost]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<VehicleShiftAssignment>> CreateVehicleShiftAssignment(VehicleShiftAssignmentCreateDto assignmentDto)
         {
             try
@@ -214,6 +221,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/VehicleShiftAssignment/bulk
         [HttpPost("bulk")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult> CreateBulkAssignments(VehicleShiftAssignmentBulkCreateDto bulkDto)
         {
             try
@@ -267,6 +275,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/VehicleShiftAssignment/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<IActionResult> UpdateVehicleShiftAssignment(int id, VehicleShiftAssignmentUpdateDto assignmentDto)
         {
             try
@@ -314,6 +323,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/VehicleShiftAssignment/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteVehicleShiftAssignment(int id)
         {
             try

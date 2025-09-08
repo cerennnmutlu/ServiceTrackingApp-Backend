@@ -22,6 +22,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Route
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<RouteModel>>> GetRoutes()
         {
             try
@@ -39,6 +40,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Route/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<RouteModel>> GetRoute(int id)
         {
             try
@@ -62,6 +64,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/Route
         [HttpPost]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<RouteModel>> CreateRoute(RouteCreateDto routeDto)
         {
             try
@@ -98,6 +101,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/Route/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<IActionResult> UpdateRoute(int id, RouteUpdateDto routeDto)
         {
             try
@@ -136,6 +140,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/Route/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteRoute(int id)
         {
             try

@@ -21,6 +21,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Driver
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<IEnumerable<Driver>>> GetDrivers()
         {
             try
@@ -39,6 +40,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Driver/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<Driver>> GetDriver(int id)
         {
             try
@@ -63,6 +65,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/Driver
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<ActionResult<Driver>> CreateDriver(DriverCreateDto driverDto)
         {
             try
@@ -97,6 +100,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/Driver/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateDriver(int id, DriverUpdateDto driverDto)
         {
             try
@@ -133,6 +137,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/Driver/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteDriver(int id)
         {
             try

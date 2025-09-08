@@ -20,6 +20,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/ServiceVehicle
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<ServiceVehicle>>> GetServiceVehicles()
         {
             try
@@ -37,6 +38,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/ServiceVehicle/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<ServiceVehicle>> GetServiceVehicle(int id)
         {
             try
@@ -60,6 +62,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/ServiceVehicle
         [HttpPost]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<ServiceVehicle>> CreateServiceVehicle(ServiceVehicleCreateDto vehicleDto)
         {
             try
@@ -109,6 +112,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/ServiceVehicle/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<IActionResult> UpdateServiceVehicle(int id, ServiceVehicleUpdateDto vehicleDto)
         {
             try
@@ -172,6 +176,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/ServiceVehicle/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteServiceVehicle(int id)
         {
             try
@@ -210,6 +215,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/ServiceVehicle/by-route/{routeId}
         [HttpGet("by-route/{routeId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<ServiceVehicle>>> GetServiceVehiclesByRoute(int routeId)
         {
             try
@@ -229,6 +235,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/ServiceVehicle/active
         [HttpGet("active")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<ServiceVehicle>>> GetActiveServiceVehicles()
         {
             try

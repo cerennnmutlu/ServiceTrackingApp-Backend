@@ -21,6 +21,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleDriverAssignment
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleDriverAssignment>>> GetVehicleDriverAssignments()
         {
             try
@@ -40,6 +41,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleDriverAssignment/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<VehicleDriverAssignment>> GetVehicleDriverAssignment(int id)
         {
             try
@@ -64,6 +66,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleDriverAssignment/vehicle/5
         [HttpGet("vehicle/{vehicleId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleDriverAssignment>>> GetAssignmentsByVehicle(int vehicleId)
         {
             try
@@ -85,6 +88,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleDriverAssignment/driver/5
         [HttpGet("driver/{driverId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleDriverAssignment>>> GetAssignmentsByDriver(int driverId)
         {
             try
@@ -106,6 +110,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/VehicleDriverAssignment/active
         [HttpGet("active")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<VehicleDriverAssignment>>> GetActiveAssignments()
         {
             try
@@ -127,6 +132,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/VehicleDriverAssignment
         [HttpPost]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<ActionResult<VehicleDriverAssignment>> CreateVehicleDriverAssignment(VehicleDriverAssignmentCreateDto assignmentDto)
         {
             try
@@ -193,6 +199,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/VehicleDriverAssignment/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<IActionResult> UpdateVehicleDriverAssignment(int id, VehicleDriverAssignmentUpdateDto assignmentDto)
         {
             try
@@ -243,6 +250,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/VehicleDriverAssignment/5/end
         [HttpPut("{id}/end")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> EndAssignment(int id)
         {
             try
@@ -271,6 +279,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/VehicleDriverAssignment/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteVehicleDriverAssignment(int id)
         {
             try

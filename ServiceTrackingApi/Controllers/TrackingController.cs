@@ -21,6 +21,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Tracking
         [HttpGet]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<Tracking>>> GetTrackings()
         {
             try
@@ -40,6 +41,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Tracking/5
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<Tracking>> GetTracking(int id)
         {
             try
@@ -64,6 +66,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Tracking/vehicle/5
         [HttpGet("vehicle/{vehicleId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<Tracking>>> GetTrackingsByVehicle(int vehicleId)
         {
             try
@@ -85,6 +88,7 @@ namespace ServiceTrackingApi.Controllers
 
         // GET: api/Tracking/shift/5
         [HttpGet("shift/{shiftId}")]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<IEnumerable<Tracking>>> GetTrackingsByShift(int shiftId)
         {
             try
@@ -106,6 +110,7 @@ namespace ServiceTrackingApi.Controllers
 
         // POST: api/Tracking
         [HttpPost]
+        [Authorize(Roles = "Admin,ShiftManager,SecurityGuard")]
         public async Task<ActionResult<Tracking>> CreateTracking(TrackingCreateDto trackingDto)
         {
             try
@@ -158,6 +163,7 @@ namespace ServiceTrackingApi.Controllers
 
         // PUT: api/Tracking/5
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,ShiftManager")]
         public async Task<IActionResult> UpdateTracking(int id, TrackingUpdateDto trackingDto)
         {
             try
@@ -215,6 +221,7 @@ namespace ServiceTrackingApi.Controllers
 
         // DELETE: api/Tracking/5
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteTracking(int id)
         {
             try
